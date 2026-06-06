@@ -314,7 +314,7 @@ function App() {
     return <PaymentPendingPage student={student} onLogout={logout} onCheckStatus={() => loadStudentEnvironment(student.id)} />
   }
 
-  const isPremium = hasPremiumAccess(student)
+  const isPremium = hasPremiumAccess()
 
   return (
     <Shell student={student} isDemo={isDemo} onLogout={logout}>
@@ -447,7 +447,7 @@ function LoginPage({ onLoginSuccess, onDemo }: { onLoginSuccess: (studentId: str
 
 function Shell({ student, isDemo, onLogout, children }: { student: Student; isDemo: boolean; onLogout: () => void; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const isPremium = hasPremiumAccess(student)
+  const isPremium = hasPremiumAccess()
   const navItems = [
     { to: '/', label: 'Home', icon: LayoutDashboard },
     { to: '/search', label: 'Search', icon: Search },
@@ -557,7 +557,7 @@ function DashboardPage({ student, colleges, cutoffs, shortlists }: { student: St
           <Metric value={student.membership_tier ?? 'No plan'} label="Plan" />
         </div>
       </section>
-      {!hasPremiumAccess(student) ? <UpgradeBanner /> : null}
+      {!hasPremiumAccess() ? <UpgradeBanner /> : null}
     </div>
   )
 }
@@ -1102,7 +1102,7 @@ function EmptyState({ title, text, compact = false }: { title: string; text: str
   )
 }
 
-function hasPremiumAccess(student: Student) {
+function hasPremiumAccess() {
   // Unlock all premium features (Recommendations, My CAP List, etc.) for all plans (including Explorer)
   return true
 }
