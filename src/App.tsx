@@ -204,7 +204,7 @@ function App() {
       colleges,
       cutoffs,
       shortlists: (shortlists ?? []) as Shortlist[],
-      branches: (dbBranches ?? []) as Branch[],
+      branches: branchesList as Branch[],
       reviews: (reviews ?? []) as Review[],
       capLists: (capLists ?? []) as CapList[],
       capItems: (capItems ?? []) as CapListItem[],
