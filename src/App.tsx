@@ -115,16 +115,16 @@ function App() {
 
     setPaymentPending(false)
 
+    const category = loadedStudent.category ?? 'General'
+
     const [
       { data: dbColleges },
-      { data: dbCutoffs },
       { data: shortlists },
       { data: dbBranches },
       { data: reviews },
       { data: capLists },
     ] = await Promise.all([
       supabase.from('colleges').select('*').order('rating', { ascending: false }),
-      supabase.from('cutoffs').select('*').order('year', { ascending: false }),
       supabase.from('shortlists').select('*').eq('student_id', studentId).order('priority_order'),
       supabase.from('branches').select('*'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
@@ -139,7 +139,40 @@ function App() {
       branches: branchesList.filter((b) => b.college_id === c.id).map((b) => b.branch_name || b.name || ''),
     })) as College[]
 
-    const cutoffs = (dbCutoffs ?? []).map((c: any) => {
+    // Fetch page 0 of cutoffs and get the total count for the student's category
+    const pageSize = 1000
+    const { data: firstPage, error: firstPageError, count } = await supabase
+      .from('cutoffs')
+      .select('*', { count: 'exact' })
+      .eq('category', category)
+      .order('year', { ascending: false })
+      .range(0, pageSize - 1)
+
+    if (firstPageError) throw firstPageError
+    const rawCutoffs = [...(firstPage ?? [])]
+
+    if (count && count > pageSize) {
+      const remainingPages = Math.ceil(count / pageSize) - 1
+      const promises = Array.from({ length: remainingPages }, (_, i) => {
+        const pageNum = i + 1
+        return supabase
+          .from('cutoffs')
+          .select('*')
+          .eq('category', category)
+          .order('year', { ascending: false })
+          .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1)
+      })
+
+      const results = await Promise.all(promises)
+      for (const res of results) {
+        if (res.error) throw res.error
+        if (res.data) {
+          rawCutoffs.push(...res.data)
+        }
+      }
+    }
+
+    const cutoffs = rawCutoffs.map((c: any) => {
       const branchObj = branchesList.find((b) => b.branch_code === c.branch_code)
       return {
         ...c,
@@ -774,14 +807,31 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
 
 function RecommendationsPage({ student, colleges, cutoffs, onAddToShortlist }: { student: Student; colleges: College[]; cutoffs: Cutoff[]; onAddToShortlist: (college: College, branch: string) => Promise<void> }) {
   const category = normalizedCategory(student)
-  const districtFiltered = student.region ? colleges.filter((college) => college.district === student.region) : colleges
-  const source = districtFiltered.length ? districtFiltered : colleges
-  const enriched = source.map((college) => enrichCollege(college, cutoffs, student, category))
-  const byBand = {
-    safe: enriched.filter((item) => item.band === 'safe').slice(0, 5),
-    moderate: enriched.filter((item) => item.band === 'moderate').slice(0, 5),
-    reach: enriched.filter((item) => item.band === 'reach').slice(0, 5),
-  }
+
+  // Prioritize region match first, then by rating
+  const sortedColleges = useMemo(() => {
+    return [...colleges].sort((a, b) => {
+      if (student.region) {
+        const aRegion = a.district === student.region
+        const bRegion = b.district === student.region
+        if (aRegion && !bRegion) return -1
+        if (!aRegion && bRegion) return 1
+      }
+      return (b.rating ?? 0) - (a.rating ?? 0)
+    })
+  }, [colleges, student.region])
+
+  const enriched = useMemo(() => {
+    return sortedColleges.map((college) => enrichCollege(college, cutoffs, student, category))
+  }, [sortedColleges, cutoffs, student, category])
+
+  const byBand = useMemo(() => {
+    return {
+      safe: enriched.filter((item) => item.band === 'safe').slice(0, 5),
+      moderate: enriched.filter((item) => item.band === 'moderate').slice(0, 5),
+      reach: enriched.filter((item) => item.band === 'reach').slice(0, 5),
+    }
+  }, [enriched])
 
   return (
     <div className="grid gap-6">
