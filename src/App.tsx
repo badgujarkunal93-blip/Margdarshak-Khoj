@@ -117,21 +117,33 @@ function App() {
 
     const category = loadedStudent.category ?? 'General'
 
+    // Load branches in pages to bypass the 1,000 row limit
+    const branchesList: any[] = []
+    let branchesPage = 0
+    const branchesPageSize = 1000
+    while (true) {
+      const { data: pageBranches, error } = await supabase
+        .from('branches')
+        .select('*')
+        .range(branchesPage * branchesPageSize, (branchesPage + 1) * branchesPageSize - 1)
+      if (error) throw error
+      if (!pageBranches || pageBranches.length === 0) break
+      branchesList.push(...pageBranches)
+      if (pageBranches.length < branchesPageSize) break
+      branchesPage++
+    }
+
     const [
       { data: dbColleges },
       { data: shortlists },
-      { data: dbBranches },
       { data: reviews },
       { data: capLists },
     ] = await Promise.all([
       supabase.from('colleges').select('*').order('rating', { ascending: false }),
       supabase.from('shortlists').select('*').eq('student_id', studentId).order('priority_order'),
-      supabase.from('branches').select('*'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('cap_lists').select('*').eq('student_id', studentId).order('updated_at', { ascending: false }),
     ])
-
-    const branchesList = (dbBranches ?? []) as any[]
 
     const colleges = (dbColleges ?? []).map((c: any) => ({
       ...c,
