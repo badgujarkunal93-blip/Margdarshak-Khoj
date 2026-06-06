@@ -11,6 +11,7 @@ export type Student = {
   category: Category | null
   region: string | null
   membership_tier: MembershipTier | null
+  payment_status?: 'pending' | 'confirmed'
   created_at?: string
   updated_at?: string
 }

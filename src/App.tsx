@@ -88,6 +88,7 @@ function App() {
   const [booting, setBooting] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [isDemo, setIsDemo] = useState(false)
+  const [paymentPending, setPaymentPending] = useState(false)
 
   const loadStudentEnvironment = async (studentId: string) => {
     setDataLoading(true)
@@ -105,6 +106,15 @@ function App() {
       window.location.href = `${LANDING_URL}?message=${encodeURIComponent('Please purchase a plan to access Margdarshak Khoj')}`
       return
     }
+
+    if (loadedStudent.payment_status === 'pending') {
+      setStudent(loadedStudent)
+      setPaymentPending(true)
+      setDataLoading(false)
+      return
+    }
+
+    setPaymentPending(false)
 
     const [{ data: colleges }, { data: cutoffs }, { data: shortlists }, { data: branches }, { data: reviews }, { data: capLists }] =
       await Promise.all([
@@ -210,7 +220,7 @@ function App() {
     if (!student) return
     const exists = data.shortlists.some((item) => item.college_id === college.id && item.branch === branch)
     if (exists) return
-    if (student.membership_tier === 'Explorer' && data.shortlists.length >= 10) return
+    // Unlimited shortlisting for all plans
 
     const nextOrder = data.shortlists.length + 1
     if (isDemo) {
@@ -299,6 +309,10 @@ function App() {
 
   if (booting) return <LoadingScreen />
   if (!student) return <LoginPage onLoginSuccess={loadStudentEnvironment} onDemo={enterDemo} />
+
+  if (paymentPending) {
+    return <PaymentPendingPage student={student} onLogout={logout} onCheckStatus={() => loadStudentEnvironment(student.id)} />
+  }
 
   const isPremium = hasPremiumAccess(student)
 
@@ -534,8 +548,7 @@ function DashboardPage({ student, colleges, cutoffs, shortlists }: { student: St
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-200">Welcome to Margdarshak Khoj</p>
         <h1 className="mt-3 text-3xl font-black leading-tight sm:text-5xl">{student.name}</h1>
         <p className="mt-4 max-w-3xl text-lg leading-8 text-blue-50">
-          Your rank is <strong>{student.rank.toLocaleString('en-IN')}</strong>. Search colleges, save up to{' '}
-          {student.membership_tier === 'Explorer' ? '10' : 'unlimited'} shortlist options, and track your CAP readiness.
+          Your rank is <strong>{student.rank.toLocaleString('en-IN')}</strong>. Search colleges, save unlimited shortlist options, and track your CAP readiness.
         </p>
         <div className="mt-8 grid gap-3 sm:grid-cols-4">
           <Metric value={colleges.length.toString()} label="Colleges" />
@@ -712,11 +725,10 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
               {college.branches.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
-          <button type="button" disabled={shortlisted || (student.membership_tier === 'Explorer' && data.shortlists.length >= 10)} onClick={() => onAddToShortlist(college, branch)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#F97316] px-4 py-3 text-sm font-black text-white hover:bg-orange-600 disabled:bg-slate-300">
+          <button type="button" disabled={shortlisted} onClick={() => onAddToShortlist(college, branch)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#F97316] px-4 py-3 text-sm font-black text-white hover:bg-orange-600 disabled:bg-slate-300">
             <Check className="size-4" />
             {shortlisted ? 'Already shortlisted' : 'Add to shortlist'}
           </button>
-          {student.membership_tier === 'Explorer' ? <p className="mt-2 text-xs font-bold text-slate-500">Explorer can save up to 10 colleges.</p> : null}
         </div>
       </section>
 
@@ -875,7 +887,6 @@ function ShortlistPage({ student, colleges, cutoffs, shortlists, onMove, onRemov
   return (
     <div className="grid gap-6">
       <PageHeading icon={ListChecks} title="My Shortlist" text="Reorder colleges, add notes, and sync your list with your counsellor." />
-      {student.membership_tier === 'Explorer' ? <p className="rounded-md bg-orange-50 p-4 text-sm font-bold text-orange-700">Explorer plan limit: save up to 10 colleges.</p> : null}
       {ordered.length ? (
         <div className="grid gap-4">
           {ordered.map((item, index) => {
@@ -1092,7 +1103,8 @@ function EmptyState({ title, text, compact = false }: { title: string; text: str
 }
 
 function hasPremiumAccess(student: Student) {
-  return student.membership_tier === 'Guide' || student.membership_tier === 'Group'
+  // Unlock all premium features (Recommendations, My CAP List, etc.) for all plans (including Explorer)
+  return true
 }
 
 function formatCurrency(value: number | null) {
@@ -1163,6 +1175,68 @@ function enrichCollege(college: College, cutoffs: Cutoff[], student: Student, ca
 
 function branchName(branch: Branch) {
   return branch.name ?? branch.branch_name ?? branch.branch ?? ''
+}
+
+function PaymentPendingPage({ student, onLogout, onCheckStatus }: { student: Student; onLogout: () => Promise<void>; onCheckStatus: () => Promise<void> }) {
+  const [checking, setChecking] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const checkStatus = async () => {
+    setChecking(true)
+    setMessage('')
+    try {
+      await onCheckStatus()
+    } catch {
+      setMessage('Failed to check status. Please try again.')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#185FA5] px-5 py-10 text-white flex items-center justify-center">
+      <div className="mx-auto max-w-xl rounded-md bg-white p-6 text-slate-950 shadow-2xl sm:p-10 text-center">
+        <span className="mx-auto grid size-16 place-items-center rounded-md bg-orange-100 text-orange-600">
+          <Loader2 className="size-8 animate-spin" aria-hidden="true" />
+        </span>
+        <h1 className="mt-6 text-2xl font-black text-[#185FA5]">Payment Verification Pending</h1>
+        <p className="mt-4 text-slate-600 leading-7">
+          Hello <strong>{student.name}</strong>, your account is currently pending payment confirmation.
+        </p>
+        <p className="mt-2 text-slate-600 leading-7 text-sm">
+          Please make sure you have paid the registration fee and shared the screenshot of your receipt with the admin.
+        </p>
+        <div className="mt-6 rounded-md bg-slate-50 p-4 text-left border border-slate-200">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#185FA5] mb-2">Instructions</p>
+          <p className="text-xs font-semibold leading-5 text-slate-600">
+            UPI ID: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-300">margdarshakcontact@okaxis</strong>
+          </p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+            WhatsApp Receipt: <a href="https://wa.me/917264030382" target="_blank" rel="noreferrer" className="underline font-bold text-[#185FA5]">+91 72640 30382</a>
+          </p>
+        </div>
+        {message ? <p className="mt-4 text-sm font-bold text-red-600">{message}</p> : null}
+        <div className="mt-8 flex flex-col gap-3">
+          <button
+            type="button"
+            disabled={checking}
+            onClick={checkStatus}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#F97316] px-5 py-3.5 text-sm font-black text-white hover:bg-orange-600 disabled:opacity-50"
+          >
+            {checking ? <Loader2 className="size-4 animate-spin" /> : null}
+            Check Verification Status
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 hover:bg-slate-100"
+          >
+            Log Out
+          </button>
+        </div>
+      </div>
+    </main>
+  )
 }
 
 export default App
