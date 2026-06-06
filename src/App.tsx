@@ -35,7 +35,6 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { demoColleges, demoCutoffs, demoShortlists, demoStudent } from './data/demo'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import type {
   Branch,
@@ -116,15 +115,39 @@ function App() {
 
     setPaymentPending(false)
 
-    const [{ data: colleges }, { data: cutoffs }, { data: shortlists }, { data: branches }, { data: reviews }, { data: capLists }] =
-      await Promise.all([
-        supabase.from('colleges').select('*').order('rating', { ascending: false }),
-        supabase.from('cutoffs').select('*').order('year', { ascending: false }),
-        supabase.from('shortlists').select('*').eq('student_id', studentId).order('priority_order'),
-        supabase.from('branches').select('*'),
-        supabase.from('reviews').select('*').order('created_at', { ascending: false }),
-        supabase.from('cap_lists').select('*').eq('student_id', studentId).order('updated_at', { ascending: false }),
-      ])
+    const [
+      { data: dbColleges },
+      { data: dbCutoffs },
+      { data: shortlists },
+      { data: dbBranches },
+      { data: reviews },
+      { data: capLists },
+    ] = await Promise.all([
+      supabase.from('colleges').select('*').order('rating', { ascending: false }),
+      supabase.from('cutoffs').select('*').order('year', { ascending: false }),
+      supabase.from('shortlists').select('*').eq('student_id', studentId).order('priority_order'),
+      supabase.from('branches').select('*'),
+      supabase.from('reviews').select('*').order('created_at', { ascending: false }),
+      supabase.from('cap_lists').select('*').eq('student_id', studentId).order('updated_at', { ascending: false }),
+    ])
+
+    const branchesList = (dbBranches ?? []) as any[]
+
+    const colleges = (dbColleges ?? []).map((c: any) => ({
+      ...c,
+      location: c.city || c.address || '',
+      branches: branchesList.filter((b) => b.college_id === c.id).map((b) => b.branch_name || b.name || ''),
+    })) as College[]
+
+    const cutoffs = (dbCutoffs ?? []).map((c: any) => {
+      const branchObj = branchesList.find((b) => b.branch_code === c.branch_code)
+      return {
+        ...c,
+        branch: branchObj ? (branchObj.branch_name || branchObj.name || '') : c.branch_code || '',
+        round: `Round ${c.round}`,
+        rank_cutoff: c.closing_rank ?? c.opening_rank ?? 0,
+      }
+    }) as Cutoff[]
 
     const capListIds = ((capLists ?? []) as CapList[]).map((list) => list.id)
     const { data: capItems } = capListIds.length
@@ -133,10 +156,10 @@ function App() {
 
     setStudent(loadedStudent)
     setData({
-      colleges: (colleges ?? []) as College[],
-      cutoffs: (cutoffs ?? []) as Cutoff[],
+      colleges,
+      cutoffs,
       shortlists: (shortlists ?? []) as Shortlist[],
-      branches: (branches ?? []) as Branch[],
+      branches: (dbBranches ?? []) as Branch[],
       reviews: (reviews ?? []) as Review[],
       capLists: (capLists ?? []) as CapList[],
       capItems: (capItems ?? []) as CapListItem[],
@@ -165,44 +188,6 @@ function App() {
     void boot()
   }, [])
 
-  const enterDemo = () => {
-    setIsDemo(true)
-    setStudent({ ...demoStudent, membership_tier: 'Guide' })
-    setData({
-      colleges: demoColleges,
-      cutoffs: demoCutoffs,
-      shortlists: demoShortlists,
-      branches: [],
-      reviews: [],
-      capLists: [
-        {
-          id: 'demo-cap-list',
-          student_id: demoStudent.id,
-          counsellor_notes: 'Demo counsellor CAP list.',
-        },
-      ],
-      capItems: [
-        {
-          id: 'demo-cap-1',
-          cap_list_id: 'demo-cap-list',
-          college_id: 'pict',
-          branch: 'Computer Science',
-          priority_order: 1,
-          safety_label: 'MODERATE',
-          notes: 'Strong CS option for Pune preference.',
-        },
-        {
-          id: 'demo-cap-2',
-          cap_list_id: 'demo-cap-list',
-          college_id: 'walchand',
-          branch: 'Computer Science',
-          priority_order: 2,
-          safety_label: 'SAFE',
-          notes: 'Keep as high-confidence option.',
-        },
-      ],
-    })
-  }
 
   const logout = async () => {
     if (!isDemo && isSupabaseConfigured) await supabase.auth.signOut()
@@ -308,7 +293,7 @@ function App() {
   }
 
   if (booting) return <LoadingScreen />
-  if (!student) return <LoginPage onLoginSuccess={loadStudentEnvironment} onDemo={enterDemo} />
+  if (!student) return <LoginPage onLoginSuccess={loadStudentEnvironment} />
 
   if (paymentPending) {
     return <PaymentPendingPage student={student} onLogout={logout} onCheckStatus={() => loadStudentEnvironment(student.id)} />
@@ -337,13 +322,13 @@ function App() {
               isPremium ? (
                 <RecommendationsPage student={student} colleges={data.colleges} cutoffs={data.cutoffs} onAddToShortlist={addToShortlist} />
               ) : (
-                <UpgradePage title="Recommendations are included in Guide and Group" />
+                <UpgradePage title="Recommendations are included in the Guide plan" />
               )
             }
           />
           <Route
             path="/cap-list"
-            element={isPremium ? <MyCapListPage student={student} data={data} /> : <UpgradePage title="My CAP List is included in Guide and Group" />}
+            element={isPremium ? <MyCapListPage student={student} data={data} /> : <UpgradePage title="My CAP List is included in the Guide plan" />}
           />
           <Route
             path="/shortlist"
@@ -366,7 +351,7 @@ function App() {
   )
 }
 
-function LoginPage({ onLoginSuccess, onDemo }: { onLoginSuccess: (studentId: string) => Promise<void>; onDemo: () => void }) {
+function LoginPage({ onLoginSuccess }: { onLoginSuccess: (studentId: string) => Promise<void> }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -376,7 +361,7 @@ function LoginPage({ onLoginSuccess, onDemo }: { onLoginSuccess: (studentId: str
     event.preventDefault()
     setError('')
     if (!isSupabaseConfigured) {
-      setError('Supabase env values are missing. Use demo preview or add .env values first.')
+      setError('Supabase env values are missing. Please configure Supabase settings.')
       return
     }
 
@@ -431,13 +416,6 @@ function LoginPage({ onLoginSuccess, onDemo }: { onLoginSuccess: (studentId: str
           >
             {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
             Login to Khoj
-          </button>
-          <button
-            type="button"
-            onClick={onDemo}
-            className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#185FA5]/20 px-5 py-3 text-sm font-black text-[#185FA5] transition hover:bg-blue-50"
-          >
-            Preview with demo data
           </button>
         </form>
       </div>
@@ -987,7 +965,7 @@ function RecommendationBand({ title, items, student, onAdd }: { title: string; i
 function UpgradePage({ title }: { title: string }) {
   return (
     <div className="grid gap-6">
-      <PageHeading icon={LockKeyhole} title={title} text="Upgrade to Guide or Group to unlock counsellor-backed recommendations and CAP list access." />
+      <PageHeading icon={LockKeyhole} title={title} text="Upgrade to the Guide plan to unlock counsellor-backed recommendations and CAP list access." />
       <UpgradeBanner />
     </div>
   )
@@ -998,7 +976,7 @@ function UpgradeBanner() {
     <section className="rounded-md border border-orange-200 bg-orange-50 p-5">
       <h2 className="text-xl font-black text-orange-800">Upgrade for full counselling support</h2>
       <p className="mt-2 max-w-3xl font-semibold leading-7 text-orange-900">
-        Explorer gives you search, filters, profiles, cutoff history, and 10 saved colleges. Guide and Group unlock recommendations and your counsellor-prepared CAP list.
+        Explorer gives you search, filters, profiles, cutoff history, and 10 saved colleges. The Guide plan unlocks recommendations and your counsellor-prepared CAP list.
       </p>
       <a href={LANDING_URL} className="mt-4 inline-flex rounded-md bg-[#F97316] px-4 py-3 text-sm font-black text-white hover:bg-orange-600">
         Upgrade plan
