@@ -15,8 +15,6 @@ import {
   BookOpen,
   Building2,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Download,
   FileText,
   GraduationCap,
@@ -50,7 +48,6 @@ import type {
 } from './types'
 
 const LANDING_URL = 'https://margdarshak.in'
-const fallbackPhoto = 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80'
 
 type AppData = {
   colleges: College[]
@@ -694,7 +691,6 @@ function SearchPage({
 function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Student; data: AppData; onAddToShortlist: (college: College, branch: string) => Promise<void> }) {
   const { id } = useParams()
   const college = data.colleges.find((item) => item.id === id)
-  const [photoIndex, setPhotoIndex] = useState(0)
   const [branch, setBranch] = useState(college?.branches[0] ?? '')
   const category = normalizedCategory(student)
 
@@ -703,8 +699,6 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
   }, [college])
 
   if (!college) return <EmptyState title="College not found" text="Go back to search and select a valid college." />
-
-  const photos = college.photos.length ? college.photos : [fallbackPhoto]
   const history = data.cutoffs
     .filter((cutoff) => cutoff.college_id === college.id && cutoff.category === category)
     .sort((a, b) => b.year - a.year || a.round.localeCompare(b.round))
@@ -714,22 +708,13 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
 
   return (
     <div className="grid gap-6">
-      <section className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-        <div className="relative">
-          <img src={photos[photoIndex]} alt={college.name} className="h-64 w-full object-cover sm:h-96" />
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-950/90 to-transparent p-5 text-white">
-            <p className="text-sm font-bold text-orange-200">{college.university}</p>
-            <h1 className="mt-2 text-3xl font-black sm:text-5xl">{college.name}</h1>
-            <p className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-100"><MapPin className="size-4" />{college.district}</p>
-          </div>
-          <button type="button" onClick={() => setPhotoIndex((current) => (current === 0 ? photos.length - 1 : current - 1))} className="absolute left-4 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-md bg-white/90 text-[#185FA5]" aria-label="Previous photo">
-            <ChevronLeft className="size-5" />
-          </button>
-          <button type="button" onClick={() => setPhotoIndex((current) => (current + 1) % photos.length)} className="absolute right-4 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-md bg-white/90 text-[#185FA5]" aria-label="Next photo">
-            <ChevronRight className="size-5" />
-          </button>
+      <header className="overflow-hidden rounded-md border border-slate-200 bg-[#185FA5] p-6 text-white shadow-sm sm:p-8">
+        <div>
+          <p className="text-sm font-bold text-orange-200">{college.university}</p>
+          <h1 className="mt-2 text-3xl font-black sm:text-5xl">{college.name}</h1>
+          <p className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-100"><MapPin className="size-4" />{college.district}</p>
         </div>
-      </section>
+      </header>
 
       <section className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -979,7 +964,6 @@ function CollegeCard({ result, student, onAdd }: { result: EnrichedCollege; stud
   const isSafe = result.band === 'safe'
   return (
     <article className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
-      <img src={result.college.photos[0] ?? fallbackPhoto} alt={result.college.name} className="h-44 w-full object-cover" />
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
