@@ -163,13 +163,21 @@ function App() {
       branches: branchesList.filter((b) => b.college_id === c.id).map((b) => b.branch_name || b.name || ''),
     })) as College[]
 
-    // Fetch page 0 of cutoffs and get the total count for the student's category
+    // Find the latest year available in the database
+    const { data: maxYearData } = await supabase
+      .from('cutoffs')
+      .select('year')
+      .order('year', { ascending: false })
+      .limit(1)
+    const latestYear = maxYearData && maxYearData[0] ? maxYearData[0].year : 2024
+
+    // Fetch page 0 of cutoffs for the latest year and the student's category
     const pageSize = 1000
     const { data: firstPage, error: firstPageError, count } = await supabase
       .from('cutoffs')
-      .select('*', { count: 'exact' })
+      .select('college_id,branch_code,category,round,year,closing_rank,opening_rank', { count: 'exact' })
       .eq('category', category)
-      .order('year', { ascending: false })
+      .eq('year', latestYear)
       .range(0, pageSize - 1)
 
     if (firstPageError) throw firstPageError
@@ -181,9 +189,9 @@ function App() {
         const pageNum = i + 1
         return supabase
           .from('cutoffs')
-          .select('*')
+          .select('college_id,branch_code,category,round,year,closing_rank,opening_rank')
           .eq('category', category)
-          .order('year', { ascending: false })
+          .eq('year', latestYear)
           .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1)
       })
 
@@ -725,16 +733,45 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
   const college = data.colleges.find((item) => item.id === id)
   const [branch, setBranch] = useState(college?.branches[0] ?? '')
   const category = normalizedCategory(student)
+  const [history, setHistory] = useState<Cutoff[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   useEffect(() => {
     if (college) setBranch(college.branches[0] ?? '')
   }, [college])
 
+  useEffect(() => {
+    if (!college) return
+    const fetchHistory = async () => {
+      setLoadingHistory(true)
+      try {
+        const { data: dbHistory, error } = await supabase
+          .from('cutoffs')
+          .select('*')
+          .eq('college_id', college.id)
+          .eq('category', category)
+        if (error) throw error
+
+        const mappedHistory = (dbHistory ?? []).map((c: any) => {
+          const branchObj = data.branches.find((b: any) => b.branch_code === c.branch_code)
+          return {
+            ...c,
+            branch: branchObj ? (branchObj.branch_name || branchObj.name || '') : c.branch_code || '',
+            round: `Round ${c.round}`,
+            rank_cutoff: c.closing_rank ?? c.opening_rank ?? 0,
+          }
+        })
+        setHistory(mappedHistory.sort((a, b) => b.year - a.year || a.round.localeCompare(b.round)).slice(0, 9))
+      } catch (err) {
+        console.error('Failed to fetch cutoff history:', err)
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+    void fetchHistory()
+  }, [college?.id, category, data.branches])
+
   if (!college) return <EmptyState title="College not found" text="Go back to search and select a valid college." />
-  const history = data.cutoffs
-    .filter((cutoff) => cutoff.college_id === college.id && cutoff.category === category)
-    .sort((a, b) => b.year - a.year || a.round.localeCompare(b.round))
-    .slice(0, 9)
   const shortlisted = data.shortlists.some((item) => item.college_id === college.id && item.branch === branch)
   const reviews = data.reviews.filter((review) => review.college_id === college.id)
 
@@ -805,15 +842,30 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
               <tr><th className="px-4 py-3">Year</th><th className="px-4 py-3">Round</th><th className="px-4 py-3">Branch</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Cutoff rank</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {history.map((cutoff) => (
-                <tr key={cutoff.id}>
-                  <td className="px-4 py-4">{cutoff.year}</td>
-                  <td className="px-4 py-4">{cutoff.round}</td>
-                  <td className="px-4 py-4 font-bold text-[#185FA5]">{cutoff.branch}</td>
-                  <td className="px-4 py-4">{cutoff.category}</td>
-                  <td className="px-4 py-4 font-black text-[#F97316]">{cutoffRank(cutoff)?.toLocaleString('en-IN') ?? 'NA'}</td>
+              {loadingHistory ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                    <Loader2 className="mx-auto size-5 animate-spin text-[#F97316] mb-2" />
+                    Loading cutoff history...
+                  </td>
                 </tr>
-              ))}
+              ) : history.length ? (
+                history.map((cutoff) => (
+                  <tr key={cutoff.id}>
+                    <td className="px-4 py-4">{cutoff.year}</td>
+                    <td className="px-4 py-4">{cutoff.round}</td>
+                    <td className="px-4 py-4 font-bold text-[#185FA5]">{cutoff.branch}</td>
+                    <td className="px-4 py-4">{cutoff.category}</td>
+                    <td className="px-4 py-4 font-black text-[#F97316]">{cutoffRank(cutoff)?.toLocaleString('en-IN') ?? 'NA'}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                    No cutoff history available for your category.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
