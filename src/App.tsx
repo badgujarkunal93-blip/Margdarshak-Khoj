@@ -224,6 +224,16 @@ function App() {
       ? await supabase.from('cap_list_items').select('*').in('cap_list_id', capListIds).order('priority_order')
       : { data: [] }
 
+    const mappedCapItems = (capItems ?? []).map((item: any) => {
+      const branchRecord = branchesList.find(
+        (b) => b.branch_code === item.branch_code && b.college_id === item.college_id
+      )
+      return {
+        ...item,
+        branch: branchRecord ? (branchRecord.branch_name || branchRecord.name || '') : item.branch_code || '',
+      }
+    })
+
     setStudent(loadedStudent)
     const freshData = {
       colleges,
@@ -232,7 +242,7 @@ function App() {
       branches: branchesList as Branch[],
       reviews: (reviews ?? []) as Review[],
       capLists: (capLists ?? []) as CapList[],
-      capItems: (capItems ?? []) as CapListItem[],
+      capItems: mappedCapItems as CapListItem[],
     }
     setData(freshData)
     try {
@@ -615,7 +625,7 @@ function DashboardPage({ student, colleges, cutoffs, shortlists }: { student: St
         <p className="mt-4 max-w-3xl text-lg leading-8 text-blue-50">
           Your rank is <strong>{student.rank.toLocaleString('en-IN')}</strong>. Search colleges, save unlimited shortlist options, and track your CAP readiness.
         </p>
-        <div className="mt-8 grid gap-3 sm:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric value={colleges.length.toString()} label="Colleges" />
           <Metric value={safeCount.toString()} label="Safe options" />
           <Metric value={shortlists.length.toString()} label="Shortlisted" />
@@ -640,6 +650,7 @@ function SearchPage({
   branches: Branch[]
   onAddToShortlist: (college: College, branch: string) => Promise<void>
 }) {
+  const [showFilters, setShowFilters] = useState(false)
   const [params] = useSearchParams()
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [district, setDistrict] = useState('')
@@ -688,34 +699,46 @@ function SearchPage({
     <div className="grid gap-6">
       <PageHeading icon={Search} title="Search & Filter" text="Find colleges using your category, rank, branch, fees, and district filters." />
       <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center gap-2 text-sm font-black text-[#185FA5]">
-          <SlidersHorizontal className="size-4" />
-          Filters
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-sm font-black text-[#185FA5]">
+            <SlidersHorizontal className="size-4" />
+            Filters
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters((f) => !f)}
+            className="rounded-md border border-[#185FA5]/20 px-3 py-1.5 text-xs font-black text-[#185FA5] hover:bg-blue-50 md:hidden"
+          >
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input className="input" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} placeholder="Search college..." />
-          <select className="input" value={district} onChange={(event) => { setDistrict(event.target.value); setPage(1) }}>
-            <option value="">All districts</option>
-            {districts.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className="input" value={branch} onChange={(event) => { setBranch(event.target.value); setPage(1) }}>
-            <option value="">All branches</option>
-            {branchOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className="input" value={university} onChange={(event) => { setUniversity(event.target.value); setPage(1) }}>
-            <option value="">All universities</option>
-            {universities.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <label className="grid gap-1 text-sm font-bold text-[#185FA5]">
-            Fees up to {formatCurrency(maxFees)}
-            <input type="range" min="20000" max="250000" step="5000" value={maxFees} onChange={(event) => { setMaxFees(Number(event.target.value)); setPage(1) }} />
-          </label>
-          <input className="input bg-slate-50" value={category} readOnly aria-label="Category from profile" />
-          <select className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-            <option value="cutoff">Sort by cut-off rank</option>
-            <option value="fees">Fees low to high</option>
-            <option value="rating">Sort by rating</option>
-          </select>
+          
+          <div className={`${showFilters ? 'contents' : 'hidden md:contents'}`}>
+            <select className="input" value={district} onChange={(event) => { setDistrict(event.target.value); setPage(1) }}>
+              <option value="">All districts</option>
+              {districts.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select className="input" value={branch} onChange={(event) => { setBranch(event.target.value); setPage(1) }}>
+              <option value="">All branches</option>
+              {branchOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select className="input" value={university} onChange={(event) => { setUniversity(event.target.value); setPage(1) }}>
+              <option value="">All universities</option>
+              {universities.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <label className="grid gap-1 text-sm font-bold text-[#185FA5]">
+              Fees up to {formatCurrency(maxFees)}
+              <input type="range" min="20000" max="250000" step="5000" value={maxFees} onChange={(event) => { setMaxFees(Number(event.target.value)); setPage(1) }} />
+            </label>
+            <input className="input bg-slate-50" value={category} readOnly aria-label="Category from profile" />
+            <select className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <option value="cutoff">Sort by cut-off rank</option>
+              <option value="fees">Fees low to high</option>
+              <option value="rating">Sort by rating</option>
+            </select>
+          </div>
         </div>
       </section>
 
@@ -791,16 +814,7 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
       </header>
 
       <section className="grid gap-5 lg:grid-cols-[1fr_340px]">
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={BookOpen} title="About college" text="Core details used while comparing this college for CAP planning." />
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <Info label="University" value={college.university} />
-            <Info label="District" value={college.district} />
-            <Info label="Established" value={college.established_year?.toString() ?? 'Not listed'} />
-            <Info label="Accreditation" value={college.accreditation ?? 'Not listed'} />
-          </div>
-        </div>
-        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:order-2">
           <label className="grid gap-2 text-sm font-bold text-[#185FA5]">
             Branch for shortlist
             <select className="input" value={branch} onChange={(event) => setBranch(event.target.value)}>
@@ -811,6 +825,15 @@ function CollegeProfilePage({ student, data, onAddToShortlist }: { student: Stud
             <Check className="size-4" />
             {shortlisted ? 'Already shortlisted' : 'Add to shortlist'}
           </button>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:order-1">
+          <SectionTitle icon={BookOpen} title="About college" text="Core details used while comparing this college for CAP planning." />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <Info label="University" value={college.university} />
+            <Info label="District" value={college.district} />
+            <Info label="Established" value={college.established_year?.toString() ?? 'Not listed'} />
+            <Info label="Accreditation" value={college.accreditation ?? 'Not listed'} />
+          </div>
         </div>
       </section>
 
@@ -963,8 +986,8 @@ function MyCapListPage({ student, data }: { student: Student; data: AppData }) {
       <PageHeading icon={FileText} title="My CAP List" text="Your counsellor-prepared final preference list." />
       {items.length ? (
         <>
-          <div className="flex justify-end">
-            <button onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-md bg-[#F97316] px-4 py-3 font-black text-white hover:bg-orange-600">
+          <div className="flex flex-col sm:flex-row sm:justify-end">
+            <button onClick={downloadPdf} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#F97316] px-4 py-3 font-black text-white hover:bg-orange-600 w-full sm:w-auto">
               <Download className="size-4" />
               Download PDF
             </button>
