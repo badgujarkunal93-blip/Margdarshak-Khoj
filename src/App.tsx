@@ -114,6 +114,21 @@ function App() {
 
     const category = loadedStudent.category ?? 'General'
 
+    // Check sessionStorage cache
+    const cacheKey = `khoj_data_${studentId}`
+    const cached = sessionStorage.getItem(cacheKey)
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        setStudent(loadedStudent)
+        setData(parsed)
+        setDataLoading(false)
+        return
+      } catch (e) {
+        sessionStorage.removeItem(cacheKey)
+      }
+    }
+
     // Load branches in pages to bypass the 1,000 row limit
     const branchesList: any[] = []
     let branchesPage = 0
@@ -197,7 +212,7 @@ function App() {
       : { data: [] }
 
     setStudent(loadedStudent)
-    setData({
+    const freshData = {
       colleges,
       cutoffs,
       shortlists: (shortlists ?? []) as Shortlist[],
@@ -205,9 +220,25 @@ function App() {
       reviews: (reviews ?? []) as Review[],
       capLists: (capLists ?? []) as CapList[],
       capItems: (capItems ?? []) as CapListItem[],
-    })
+    }
+    setData(freshData)
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(freshData))
+    } catch (e) {
+      console.warn('Failed to cache data in sessionStorage', e)
+    }
     setDataLoading(false)
   }
+
+  useEffect(() => {
+    if (student && data !== emptyData) {
+      try {
+        sessionStorage.setItem(`khoj_data_${student.id}`, JSON.stringify(data))
+      } catch (e) {
+        console.warn('Failed to cache data in sessionStorage', e)
+      }
+    }
+  }, [data, student])
 
   useEffect(() => {
     const boot = async () => {
@@ -232,6 +263,7 @@ function App() {
 
 
   const logout = async () => {
+    if (student) sessionStorage.removeItem(`khoj_data_${student.id}`)
     if (!isDemo && isSupabaseConfigured) await supabase.auth.signOut()
     setStudent(null)
     setData(emptyData)
