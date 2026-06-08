@@ -1345,7 +1345,7 @@ function PaymentPendingPage({ student, onLogout, onCheckStatus }: { student: Stu
         <div className="mt-6 rounded-md bg-slate-50 p-4 text-left border border-slate-200">
           <p className="text-xs font-black uppercase tracking-[0.12em] text-[#185FA5] mb-2">Instructions</p>
           <p className="text-xs font-semibold leading-5 text-slate-600">
-            UPI ID: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-300">margdarshakcontact@okaxis</strong>
+            UPI ID: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-300">omkarjadhawar9@okaxis</strong>
           </p>
           <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
             WhatsApp Receipt: <a href="https://wa.me/917264030382" target="_blank" rel="noreferrer" className="underline font-bold text-[#185FA5]">+91 72640 30382</a>
